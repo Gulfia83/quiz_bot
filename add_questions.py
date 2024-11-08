@@ -10,5 +10,6 @@ def parse_file(file):
             questions.append(part.split(':\n')[1].replace('\n', ' '))
         if 'Ответ' in part:
             answers.append(part.split(':\n')[1])
+    questions_and_answers = dict(zip(questions, answers))
 
-    return dict(zip(questions, answers))
+    return questions_and_answers
