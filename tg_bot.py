@@ -5,11 +5,15 @@ import redis
 from random import choice
 from environs import Env
 from telegram import Update, Bot, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, \
+      CallbackContext, ConversationHandler
 
 from add_questions import parse_file
 
 logger = logging.getLogger(__name__)
+
+
+ANSWERING = 1
 
 
 class TelegramLogsHandler(logging.Handler):
@@ -24,33 +28,68 @@ class TelegramLogsHandler(logging.Handler):
         self.tg_bot.send_message(chat_id=self.chat_id, text=log_entry)
 
 
-def start(update: Update, context: CallbackContext) -> None:
+def get_keyboard():
     keyboard = [
-        ['Новый вопрос', 'Сдаться'],
+        ["Новый вопрос", "Сдаться"],
         ['Мой счет']
-        ]
-    reply_markup = ReplyKeyboardMarkup(keyboard)
+    ]
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard
+    )
+
+    return reply_markup
+
+
+def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text(
         'Привет! Я бот для викторин!',
-        reply_markup=reply_markup
+        reply_markup=get_keyboard()
         )
 
 
-def help_command(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('Help!')
+def handle_new_question_request(update: Update, context: CallbackContext) -> None:
+    db_connection = context.bot_data['redis_connection']
+    question = choice(list(context.bot_data["questions_and_answers"].keys()))
+    db_connection.set(update.message.chat_id, question)
+    update.message.reply_text(question)
+
+    return ANSWERING
 
 
-def echo(update: Update, context: CallbackContext, db_connection) -> None:
-    questions_and_answers = parse_file('questions/1vs1200.txt')
-    print(questions_and_answers)
-    questions = list(questions_and_answers.keys())
+def handle_solution_attempt(update: Update, context: CallbackContext) -> None:
+    db_connection = context.bot_data['redis_connection']
+    question = db_connection.get(update.message.chat_id)
     user_input = update.effective_message.text
-    random_question = choice(questions)
-    if user_input == 'Новый вопрос':
-        update.message.reply_text(random_question)
-        db_connection.set(update.effective_user.id, random_question)
-        #saved_question = db_connection.get(update.effective_user.id)
-        #logger.info(f"Сохраненный вопрос для пользователя {update.effective_user.id}: {saved_question}")
+    answer = context.bot_data['questions_and_answers'].get(question)
+    correct_answer = ''
+    if '.' in answer:
+        correct_answer = answer.split('.')[0].lower()
+    elif '(' in answer:
+        correct_answer = answer.split('(')[0].lower()
+    if user_input.lower() in correct_answer:
+        update.message.reply_text(
+            "Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»",
+            reply_markup=get_keyboard()
+            )
+        return ConversationHandler.END
+    else:
+        update.message.reply_text(
+            "Неправильно… Попробуешь ещё раз?",
+            reply_markup=get_keyboard()
+            )
+
+
+def give_up(update: Update, context: CallbackContext):
+    db_connection = context.bot_data['redis_connection']
+    question = db_connection.get(update.message.chat_id)
+    answer = context.bot_data["questions_and_answers"].get(question)
+    update.message.reply_text(f'Правильный ответ: {answer}')
+
+    return handle_new_question_request(update, context)
+
+
+def error(bot, update, error):
+    logger.warning('Update "%s" caused error "%s"', update, error)
 
 
 def main() -> None:
@@ -62,31 +101,45 @@ def main() -> None:
     redis_db_port = env.str('REDIS_DB_PORT')
     bot = Bot(tg_bot_token)
 
-    db_connection = redis.Redis(host=redis_db_host,
-                                port=redis_db_port,
-                                decode_responses=True)
-    
+    redis_connection = redis.Redis(host=redis_db_host,
+                                   port=redis_db_port,
+                                   decode_responses=True)
+    questions_and_answers = parse_file('questions/1vs1200.txt')
+
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
     )
     logger.addHandler(TelegramLogsHandler(bot, tg_chat_id))
     logger.info('Бот запущен')
 
-    try:
-        updater = Updater(tg_bot_token)
+    updater = Updater(tg_bot_token)
+    dispatcher = updater.dispatcher
+    dispatcher.bot_data['redis_connection'] = redis_connection
+    dispatcher.bot_data['questions_and_answers'] = questions_and_answers
+        
+    conversation = ConversationHandler(
+        entry_points=[MessageHandler(
+            Filters.regex(r"^Новый вопрос$"),
+            handle_new_question_request
+            )],
+        states={
+            ANSWERING: [
+                MessageHandler(Filters.regex(r"^Сдаться$"), give_up),
+                MessageHandler(Filters.text & ~Filters.command,
+                               handle_solution_attempt),
+            ]
+        },
+        fallbacks=[CommandHandler("cancel", start)]
+    )
 
-        dispatcher = updater.dispatcher
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(conversation)
 
-        dispatcher.add_handler(CommandHandler("start", start))
-        dispatcher.add_handler(CommandHandler("help", help_command))
-        dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command,
-                                              partial(echo, db_connection=db_connection)))
+    dispatcher.add_error_handler(error)
 
-        updater.start_polling()
+    updater.start_polling()
 
-        updater.idle()
-    except Exception as e:
-        logging.exception(e)
+    updater.idle()
 
 
 if __name__ == '__main__':
