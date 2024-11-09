@@ -1,5 +1,5 @@
 def parse_file(file):
-    with open(file, "r", encoding='KOI8-R') as my_file:
+    with open(file, 'r', encoding='KOI8-R') as my_file:
         file_contents = my_file.read()
 
     questions_descriptions = file_contents.split('\n\n')
