@@ -8,6 +8,9 @@ Chatbots for online quizzes in Telegram and VK.
 - [VK bot](https://vk.com/club228196128)
 
 ## Examples of bots
+![tg_bot](https://github.com/user-attachments/assets/53bb98c9-f117-4612-8ec0-b8c8dc7ab4c3)
+
+![vk_bot](https://github.com/user-attachments/assets/2169985f-3e70-4bc5-b946-248f614a576d)
 
 ## Installation
 1. Install Python 3.10.12 and create a virtual environment, activate it:
