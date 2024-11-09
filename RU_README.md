@@ -7,7 +7,9 @@
 
 ## Примеры работы ботов
 
+![tg_bot](https://github.com/user-attachments/assets/53bb98c9-f117-4612-8ec0-b8c8dc7ab4c3)
 
+![vk_bot](https://github.com/user-attachments/assets/2169985f-3e70-4bc5-b946-248f614a576d)
 
 ## Установка
 1. Установите Python 3.10.12 и создайте виртуальное окружение, активируйте его:
