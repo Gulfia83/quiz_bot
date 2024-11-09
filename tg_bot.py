@@ -82,7 +82,7 @@ def give_up(update: Update, context: CallbackContext):
     db_connection = context.bot_data['redis_connection']
     question = db_connection.get(update.message.chat_id)
     answer = context.bot_data['questions_and_answers'].get(question)
-    update.message.reply_text(f'Правильный ответ: {answer}')
+    update.message.reply_text(f'Правильный ответ: "{answer}"')
 
     return handle_new_question_request(update, context)
 
