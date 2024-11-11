@@ -127,31 +127,38 @@ if __name__ == '__main__':
 
         longpoll = VkLongPoll(vk_session)
         for event in longpoll.listen():
-            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-                if event.text == '/start':
-                    vk_api.messages.send(
-                        user_id=event.user_id,
-                        message='Привет! Я бот для викторин!',
-                        keyboard=keyboard.get_keyboard(),
-                        random_id=randint(1, 1000)
-                    )
-                elif event.text == 'Новый вопрос':
-                    handle_new_question_request(event,
-                                                vk_api,
-                                                keyboard,
-                                                redis_connection,
-                                                questions_and_answers)
-                elif event.text == 'Сдаться':
-                    give_up(event,
-                            vk_api,
-                            keyboard,
-                            redis_connection,
-                            questions_and_answers)
-                else:
-                    handle_solution_attempt(event,
+            if not (event.type == VkEventType.MESSAGE_NEW and event.to_me):
+                continue
+
+            if event.text == '/start':
+                vk_api.messages.send(
+                    user_id=event.user_id,
+                    message='Привет! Я бот для викторин!',
+                    keyboard=keyboard.get_keyboard(),
+                    random_id=randint(1, 1000)
+                )
+                continue
+
+            if event.text == 'Новый вопрос':
+                handle_new_question_request(event,
                                             vk_api,
                                             keyboard,
                                             redis_connection,
                                             questions_and_answers)
+                continue
+
+            if event.text == 'Сдаться':
+                give_up(event,
+                        vk_api,
+                        keyboard,
+                        redis_connection,
+                        questions_and_answers)
+                continue
+
+            handle_solution_attempt(event,
+                                    vk_api,
+                                    keyboard,
+                                    redis_connection,
+                                    questions_and_answers)
     except Exception as exception:
         logger.exception(exception)
